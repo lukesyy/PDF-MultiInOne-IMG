@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta name="viewport"
+		content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+	<title>pdf转图片</title>
+
+</head>
+<style>
+	#pop {
+		position: fixed;
+		width: 1404px;
+		left: 100%;
+	}
+
+
+</style>
+
+<body>
+	 <div id="pop"></div>
+   <div class="loding" style="font-size: 1.3em; margin: 100px auto; width: 100%; display: block; text-align: center">
+    <div>请不要关闭当前窗口，正在为您合并PDF并生成图片...</div>
+    <div>请耐心等候15秒左右</div>
+  </div>
+</body>
+<script src="https://apps.bdimg.com/libs/jquery/1.11.3/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/lukesyy/Html-Pdf-MultiInOne@main/build/pdf.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/lukesyy/Html-Pdf-MultiInOne@main/build/pdf.worker.js"></script>
+<script>
+	//  ！！！！！！把你的pdf地址们 放到这个数组中就不用管了！！！！！！！！！！！！！！！
+	let pdfUrlArr = [
+		'https://lawkehyt.oss-cn-beijing.aliyuncs.com/%E6%9C%B1%E4%BA%91%E4%B8%AD_bbefa.pdf',
+		'https://lawkehyt.oss-cn-beijing.aliyuncs.com/%E6%9C%B1%E4%BA%91%E4%B8%AD_bbefa.pdf',
+		'https://lawkehyt.oss-cn-beijing.aliyuncs.com/%E6%9C%B1%E4%BA%91%E4%B8%AD_bbefa.pdf',
+		'https://lawkehyt.oss-cn-beijing.aliyuncs.com/%E6%9C%B1%E4%BA%91%E4%B8%AD_bbefa.pdf',
+		'https://lawkehyt.oss-cn-beijing.aliyuncs.com/%E6%9C%B1%E4%BA%91%E4%B8%AD_bbefa.pdf',
+		'https://lawkehyt.oss-cn-beijing.aliyuncs.com/%E6%9C%B1%E4%BA%91%E4%B8%AD_bbefa.pdf',
+		'https://lawkehyt.oss-cn-beijing.aliyuncs.com/%E6%9C%B1%E4%BA%91%E4%B8%AD_bbefa.pdf',
+
+	] 	
+  let PagesAll = 0
+	let PromiseArr = [] //所有pdf的Promise对象
+	let PagesAllCope = 0 //总页数备份
+	let callbackNum = 0 //当前渲染完成进度
+	let myid = 0 // 用于递归渲染
+	let PromiseRes = []//所有Promise执行完毕的对象
+	async function ready() {
+		pdfUrlArr.forEach(item => {
+			PromiseArr.push(PDFJS.getDocument(item))
+		})
+		PromiseRes = await Promise.all(PromiseArr) //所有pdf的Promise
+		PromiseRes.forEach((item, index) => {
+			PagesAll += item.pdfInfo.numPages //计算总页数
+		})
+		PagesAllCope = PagesAll
+		addPdf()
+	}
+	ready()
+
+	function addPdf() {
+		if (myid < PromiseRes.length) {
+			loadPDF(PromiseRes[myid], PagesAllCope--)
+				++myid
+			addPdf()
+		}
+	}
+
+	function loadPDF(pdf, id) {
+		//用 promise 获取页面
+		var canvasid = ''
+		var idTemplate = 'pdf_' + id + '-'
+		var pageNum = pdf.numPages
+		//根据页码创建画布
+		createSeriesCanvas(pageNum, idTemplate)
+		//将pdf渲染到画布上去
+		for (var i = 1; i <= pageNum; i++) {
+			canvasid = idTemplate + i //给每个canvas赋予不同的id
+			renderPDF(pdf, i, canvasid)
+		}
+	}
+	//创建和pdf页数等同的canvas数
+	function createSeriesCanvas(num, template) {
+		var id = ''
+		for (var j = 1; j <= num; j++) {
+			id = template + j
+			createPdfContainer(id, 'pdfClass')
+		}
+	}
+	//创建
+	function createPdfContainer(id, className) {
+		var pdfContainer = document.getElementById('pop')
+		var canvasNew = document.createElement('canvas')
+		canvasNew.id = id
+		canvasNew.className = className
+		pdfContainer.appendChild(canvasNew)
+	}
+	//渲染pdf
+	//建议给定pdf宽度
+	function renderPDF(pdf, i, id) {
+		pdf.getPage(i).then(function (page) {
+			var scale = 2 //调节他可以改变清晰度
+			var viewport = page.getViewport(scale)
+			//
+			//  准备用于渲染的 canvas 元素
+			//
+			var wrapper = document.getElementById('pop')
+			var canvas = document.getElementById(id)
+			var context = canvas.getContext('2d')
+			canvas.height = viewport.height
+			canvas.width = viewport.width
+			canvas.style.width = '100%'
+			canvas.style.height = '100%'
+			wrapper.style.width = Math.floor(viewport.width / scale) + 'pt'
+			wrapper.style.height = Math.floor(viewport.height / scale) + 'pt'
+			//
+			// 将 PDF 页面渲染到 canvas 上下文中
+			//
+			var renderContext = {
+				canvasContext: context,
+				viewport: viewport
+			}
+			var pageRendering = page.render(renderContext)
+			//步骤：钩入pdf渲染完成事件
+			var completeCallback = pageRendering._internalRenderTask.callback
+			pageRendering._internalRenderTask.callback = function (error) {
+				callbackNum++
+				if (callbackNum >= PagesAll) {
+					createPDF()
+				}
+			}
+		})
+	}
+	function createPDF() {
+		let imgArr = []
+		$('#pop>canvas').each((index, canvas) => { 
+			var canvas_1Url = canvas.toDataURL('image/png')
+			imgArr.push(canvas_1Url)
+		})
+		mergeImgs(imgArr).then(base64 => {
+		const imgDom = document.createElement('img')
+		imgDom.src = base64
+		document.body.appendChild(imgDom)
+	})
+
+	}
+
+     //合并图片
+	 //a4纸的尺寸[595.28,841.89]
+	function mergeImgs(list, cwith = 595.28 * 2, cheight = 841.89 * 2) {
+		return new Promise((resolve, reject) => {
+			const baseList = []
+			var canvas = document.createElement('canvas')
+			canvas.width = cwith
+			canvas.height = cheight * list.length
+			const context = canvas.getContext('2d')
+			// context.scale(2,2)  
+			list.map((item, index) => {
+				const img = new Image()
+				img.src = item
+				// 跨域
+				img.crossOrigin = 'Anonymous'
+				img.onload = () => {
+					context.drawImage(img, 0, cheight * index, cwith, cheight)
+					const base64 = canvas.toDataURL('image/png')
+					baseList.push(base64)
+
+					if (baseList[list.length - 1]) {
+						// 返回新的图片
+						resolve(baseList[list.length - 1])
+            $('.loding').hide()
+					}
+				}
+			})
+		})
+	}
+	</script>
+
+</html>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+		<title>pdf转图片</title>
+	</head>
+	<style>
+		#pop {
+			position: fixed;
+			width: 1404px;
+			left: 100%;
+		}
+		#img {
+			width: 100%;
+			height: auto;
+		}
+	</style>
+
+	<body>
+		<div id="pop"></div>
+		<canvas id="the-canvas" style="display: none"></canvas>
+		<img id="img" src="" />
+		<div class="loding" style="font-size: 1.3em; margin: 100px auto; width: 100%; display: block; text-align: center">
+			<div>请不要关闭当前窗口，正在为您合并PDF并生成图片...</div>
+			<div>请耐心等候15秒左右</div>
+		</div>
+	</body>
+	<script src="https://apps.bdimg.com/libs/jquery/1.11.3/jquery.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/gh/lukesyy/Html-Pdf-MultiInOne@main/build/pdf.js"></script>
+	<script>
+		let pdfUrlArr = [
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf',
+			'https://lawkehyt.oss-cn-beijing.aliyuncs.com/北京启江冉祺商贸中心_食品外包装_d378f.pdf'
+		]
+		showPdf(pdfUrlArr)
+		// pdf转图片
+		//urlList Arr pdf链接
+		async function showPdf(urlList) {
+			let _this = this
+			let imgArr = []
+			let PromiseArr = []
+			urlList.forEach(item => {
+				PromiseArr.push(PDFJS.getDocument(item))
+			})
+			let PromiseRes = await Promise.all(PromiseArr)
+			let a = 0
+			let b = 0
+			let timer = setInterval(() => {
+				if (!PromiseRes[a]) {
+					clearInterval(timer)
+					return
+				}
+				if (a >= b) {
+					//等待上一个渲染完毕在渲染下一个
+					++b
+					PromiseRes[a].getPage(1).then(function (page) {
+						let scale = 4
+						let viewport = page.getViewport(scale)
+						let canvas = document.getElementById('the-canvas')
+						let context = canvas.getContext('2d')
+						canvas.height = viewport.height
+						canvas.width = viewport.width
+						let renderContext = {
+							canvasContext: context,
+							viewport: viewport
+						}
+						let renderTask = page.render(renderContext)
+						renderTask.then(function () {
+							++a
+							let imgurl = canvas.toDataURL('image/JPEG') //转换为base64
+							imgArr.push(imgurl)
+							if (imgArr.length == urlList.length) {
+								console.log(1111)
+								mergeImgs(imgArr)
+							}
+						})
+					})
+				}
+			}, 100)
+		}
+		/**
+		 * 合并多张图片
+		 * @param {Array} list 图片url数组
+		 * @param {Number} cwith 画布宽度
+		 * @param {Number} cheight 画布高度
+		 * a4纸的尺寸[595.28,841.89]
+		 */
+		function mergeImgs(list, cwith = 595.28, cheight = 841.89) {
+			// return new Promise((resolve, reject) => {
+			const baseList = []
+			var canvas = document.createElement('canvas')
+			canvas.width = cwith * 2
+			canvas.height = cheight * list.length * 2
+			const context = canvas.getContext('2d')
+			context.scale(2, 2)
+			list.map((item, index) => {
+				const img = new Image()
+				img.src = item
+				// 跨域
+				img.crossOrigin = 'Anonymous'
+				img.onload = () => {
+					context.drawImage(img, 0, cheight * index, cwith, cheight)
+					const base64 = canvas.toDataURL('image/JPEG')
+					baseList.push(base64)
+					console.log(baseList)
+					if (baseList[list.length - 1]) {
+						// 返回新的图片
+						// resolve(baseList[list.length - 1])
+						//直接赋值
+						let imgDom = document.getElementsByTagName('img')[0]
+						imgDom.src = baseList[list.length - 1]
+						imgDom = document.getElementsByTagName('img')[0]
+						$('.loding').hide()
+					}
+				}
+			})
+			// })
+		}
+	</script>
+</html>
